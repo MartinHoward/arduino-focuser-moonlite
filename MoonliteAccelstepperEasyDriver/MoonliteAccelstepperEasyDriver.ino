@@ -12,7 +12,6 @@
 
 
 #include <AccelStepper.h>
-//#include <Stepper.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -21,7 +20,6 @@
 #define MAXSPEED            2000
 #define ACCELERATION        300
 #define SPEEDMULT           75
-#define STEP_PER_REV        800         //  has 64 steps and has a reduction ratio of 1/:gp64. giving 64 x 64 = 4096 steps!
 #define STEP_SIZE           8           // "Macro" steps 2048 / 4 = 512 steps per revolution
 #define TEMP_READ_INTERVAL  5000
 
