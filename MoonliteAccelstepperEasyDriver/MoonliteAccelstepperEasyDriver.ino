@@ -20,7 +20,7 @@
 #define MAXSPEED            2000
 #define ACCELERATION        300
 #define SPEEDMULT           75
-#define STEP_SIZE           8           // "Macro" steps 2048 / 4 = 512 steps per revolution
+#define STEP_SIZE           4           // "Micro" steps 1600 / 4 = 400 steps per revolution
 #define TEMP_READ_INTERVAL  5000
 
 int in1Pin = 2; 
@@ -51,6 +51,7 @@ long millisLastMove = 0;
 long millisLastReading = 0;
 int temperature = 20;
 int tempCompEnabled = 0;
+int halfStepAdjust = 1;
 
 void setup()
 {  
@@ -130,16 +131,19 @@ void motorControl(void)
 void readTempSensor(void)
 {
   float tempC;
-  
-  if ((millis() - millisLastReading) >= TEMP_READ_INTERVAL)
+
+  if (!isRunning)
   {
-    millisLastReading = millis();
+    if ((millis() - millisLastReading) >= TEMP_READ_INTERVAL)
+    {
+      millisLastReading = millis();
 
-    tempSensor.requestTemperatures();
-    tempC = tempSensor.getTempC(thermometer);
+      tempSensor.requestTemperatures();
+      tempC = tempSensor.getTempC(thermometer);
 
-    // Convert the temp to two's complement 16 bit value with 0.5 granularity
-    temperature = (int) (tempC / 0.5);
+      // Convert the temp to two's complement 16 bit value with 0.5 granularity
+      temperature = (int) (tempC / 0.5);
+    }
   }
 }
 
@@ -214,7 +218,7 @@ void processCommand(void)
     // home the motor, hard-coded, ignore parameters since we only have one motor
     if (!strcasecmp(cmd, "PH")) 
     { 
-      stepper.setCurrentPosition(8000 * STEP_SIZE);
+      stepper.setCurrentPosition(8000 * (STEP_SIZE / halfStepAdjust));
       stepper.moveTo(0);
       isRunning = 1;
     }
@@ -228,7 +232,7 @@ void processCommand(void)
     // get the current motor position
     if (!strcasecmp(cmd, "GP")) 
     {
-      pos = stepper.currentPosition() / STEP_SIZE * -1;
+      pos = stepper.currentPosition() / (STEP_SIZE / halfStepAdjust) * -1;
       char tempString[6];
       sprintf(tempString, "%04X", pos);
       Serial.print(tempString);
@@ -238,7 +242,7 @@ void processCommand(void)
     // get the new motor position (target)
     if (!strcasecmp(cmd, "GN")) 
     {
-      pos = stepper.targetPosition() / STEP_SIZE * -1;
+      pos = stepper.targetPosition() / (STEP_SIZE / halfStepAdjust) * -1;
       char tempString[6];
       sprintf(tempString, "%04X", pos);
       Serial.print(tempString);
@@ -278,10 +282,25 @@ void processCommand(void)
       stepper.setMaxSpeed(speed * SPEEDMULT);
     }
 
-    // whether half-step is enabled or not, always return "00"
+    // set motor to half step
+    if (!strcasecmp(cmd, "SH")) 
+    {
+      halfStepAdjust = 2;
+    }
+
+    // set motor to full step
+    if (!strcasecmp(cmd, "SF")) 
+    {
+      halfStepAdjust = 1;
+    }
+
+    // whether half-step is enabled or not, "FF" if half step, "00" otherwise
     if (!strcasecmp(cmd, "GH")) 
     {
-      Serial.print("00#");
+      if (halfStepAdjust == 2)
+        Serial.print("FF#");
+      else
+        Serial.print("00#");
     }
 
     // motor is moving - 01 if moving, 00 otherwise
@@ -300,14 +319,14 @@ void processCommand(void)
     if (!strcasecmp(cmd, "SP")) 
     {
       pos = hexstr2long(param);
-      stepper.setCurrentPosition(pos * STEP_SIZE * -1);
+      stepper.setCurrentPosition(pos * (STEP_SIZE / halfStepAdjust) * -1);
     }
 
     // set new motor position
     if (!strcasecmp(cmd, "SN")) 
     {
       pos = hexstr2long(param);
-      stepper.moveTo(pos * STEP_SIZE * -1);
+      stepper.moveTo(pos * (STEP_SIZE / halfStepAdjust) * -1);
     }
 
     // initiate a move
